@@ -19,14 +19,18 @@ private:
     };
 
     
-    void GetMedicionMonofasica(PZEM004Tv30 fase,ParametrosFase& struct_fase);
+    bool GetMedicionMonofasica(PZEM004Tv30 fase,ParametrosFase& struct_fase);
+    bool SimuMedicionMonofasica(ParametrosFase& struct_fase);
+
 
     float asin(float c);
     float acos(float c);
     float atan(float c);
 
+    bool _simulation = false;
 
 public:
+
     // Constructor
     PZEM_Trifasico(HardwareSerial &PZEM_SERIAL, int PZEM_RX_PIN, int PZEM_TX_PIN,
                     int PZEM_ADDRESS_FASE_A = 0x00,
@@ -34,7 +38,10 @@ public:
                     int PZEM_ADDRESS_FASE_C = 0x02);
 
     // Funciones
-    void GetMedicionTrifasica();
+    int GetMedicionTrifasica();
+
+    void setModeSimulation();
+
 
     // Objetos
     PZEM004Tv30 faseA;
