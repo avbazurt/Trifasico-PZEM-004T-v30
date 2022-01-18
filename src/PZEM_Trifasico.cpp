@@ -1,5 +1,14 @@
 #include "PZEM_Trifasico.h"
 
+#define PZEM_OK 0
+#define PZEM_ERROR_FASE_A 1
+#define PZEM_ERROR_FASE_B 2
+#define PZEM_ERROR_FASE_C 3
+#define PZEM_ERROR_FASE_AB 4
+#define PZEM_ERROR_FASE_BC 5
+#define PZEM_ERROR_FASE_AC 6
+#define PZEM_ERROR_FASE_ABC 7
+
 PZEM_Trifasico::PZEM_Trifasico(HardwareSerial &PZEM_SERIAL, int PZEM_RX_PIN, int PZEM_TX_PIN,
                                int PZEM_ADDRESS_FASE_A,
                                int PZEM_ADDRESS_FASE_B,
@@ -8,14 +17,17 @@ PZEM_Trifasico::PZEM_Trifasico(HardwareSerial &PZEM_SERIAL, int PZEM_RX_PIN, int
                                                           faseC(PZEM_SERIAL, PZEM_RX_PIN, PZEM_TX_PIN, PZEM_ADDRESS_FASE_C)
 {
     // pzem.setCalibration();
-    DatosFaseA = {0, 0, 0, 0, 0, 0, 0, 0, 0};
-    DatosFaseB = {0, 0, 0, 0, 0, 0, 0, 0, 0};
-    DatosFaseC = {0, 0, 0, 0, 0, 0, 0, 0, 0};
+    DatosFaseA = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+    DatosFaseB = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+    DatosFaseC = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 
-    //Inicializo
-    P3 = 0;
-    Q3 = 0;
-    S3 = 0;
+    MaxFaseA = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+    MaxFaseB = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+    MaxFaseC = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+
+    // Inicializo
+
+    TriFase = {0,0,0,0,0,0};
 }
 
 float PZEM_Trifasico::asin(float c)
@@ -62,68 +74,169 @@ float PZEM_Trifasico::atan(float c)
     return out;
 }
 
-void PZEM_Trifasico::GetMedicionMonofasica(PZEM004Tv30 fase, ParametrosFase &struct_fase)
+void PZEM_Trifasico::setModeSimulation()
 {
-    // Obtener Medicion Factor Potencia
-    struct_fase.FP = fase.pf();
-    if (isnan(struct_fase.FP))
-    {
-        struct_fase.FP = -1;
-    }
-    else
-    {
-        struct_fase.angule = acos(struct_fase.FP);
-    }
-
-    // Obtener Medicion Voltaje
-    struct_fase.VLN = fase.voltage();
-    if (isnan(struct_fase.VLN))
-    {
-        struct_fase.VLN = -1;
-    }
-
-    // Obtener Medicion Corriente
-    struct_fase.I = fase.current();
-    if (isnan(struct_fase.I))
-    {
-        struct_fase.I = -1;
-    }
-
-    // Obtener Medicion Potencia
-    struct_fase.P = fase.power();
-    if (isnan(struct_fase.P))
-    {
-        struct_fase.P = -1;
-    }
-    else
-    {
-        struct_fase.P = struct_fase.P / 1000;
-        struct_fase.Q = struct_fase.P * sin(struct_fase.angule);
-        struct_fase.S = struct_fase.VLN * struct_fase.I;
-    }
-
-    // Obtener Medicion Energia
-    struct_fase.E = fase.energy();
-    if (isnan(struct_fase.E))
-    {
-        struct_fase.E = -1;
-    }
-
-    // Obtener Medicion Frecuencia
-    struct_fase.f = fase.frequency();
-    if (isnan(struct_fase.f))
-    {
-        struct_fase.f = -1;
-    }
+    _simulation = true;
 }
 
-void PZEM_Trifasico::GetMedicionTrifasica()
+bool PZEM_Trifasico::ValidateData(float medicion, float &valor, float &max)
 {
-    GetMedicionMonofasica(faseA, DatosFaseA);
-    GetMedicionMonofasica(faseB, DatosFaseB);
-    GetMedicionMonofasica(faseC, DatosFaseC);
+    if (isnan(medicion))
+    {
+        valor = -1;
+        return false;
+    }
 
-    P3 = (DatosFaseA.P + DatosFaseB.P + DatosFaseC.P);
-    Q3 = (DatosFaseA.Q + DatosFaseB.Q + DatosFaseC.Q);
-    S3 = (DatosFaseA.S + DatosFaseB.S + DatosFaseC.S) / 1000;
+    valor = medicion;
+    if (valor > max)
+    {
+        max = valor;
+    }
+    return true;
+}
+
+bool PZEM_Trifasico::SimuMedicionMonofasica(ParametrosFase &struct_fase, ParametrosFase &max_fase)
+{
+    ValidateData(110 + random(-100, 100) / 10, struct_fase.VLN, max_fase.VLN);
+    ValidateData((1.15 * random(0, 200)) / 10, struct_fase.I, max_fase.I);
+    ValidateData((1.15 * random(0, 90)) / 100, struct_fase.FP, max_fase.FP);
+
+    ValidateData(acos(struct_fase.FP), struct_fase.angule, max_fase.angule);
+
+    ValidateData(struct_fase.VLN * struct_fase.I * struct_fase.FP, struct_fase.P, max_fase.P);
+    ValidateData(struct_fase.P * sin(struct_fase.angule), struct_fase.Q, max_fase.Q);
+    ValidateData(struct_fase.VLN * struct_fase.I, struct_fase.S, max_fase.S);
+
+    struct_fase.f = 60;
+    max_fase.f = 60;
+
+    return true;
+}
+
+bool PZEM_Trifasico::GetMedicionMonofasica(PZEM004Tv30 fase, ParametrosFase &struct_fase, ParametrosFase &max_fase)
+{
+    // Medicion de Factor de potencia --------------------------------
+    if (!ValidateData(fase.pf(), struct_fase.FP, max_fase.FP))
+    {
+        Serial.println("Error reading power factor");
+        return false;
+    }
+    else
+    {
+        ValidateData(acos(struct_fase.FP), struct_fase.angule, max_fase.angule);
+    }
+
+    // Medicion de Voltaje-------------------------------------------
+    if (!ValidateData(fase.voltage(), struct_fase.VLN, max_fase.VLN))
+    {
+        Serial.println("Error reading voltage");
+        return false;
+    }
+
+    // Obtener Medicion Corriente -------------------------------------------
+    if (!ValidateData(fase.current(), struct_fase.I, max_fase.I))
+    {
+        Serial.println("Error reading current");
+        return false;
+    }
+
+    // Obtener Medicion Potencia ---------------------------------------------
+    if (!ValidateData(fase.power(), struct_fase.P, max_fase.P))
+    {
+        Serial.println("Error reading power");
+        return false;
+    }
+    else
+    {
+        ValidateData(struct_fase.P / 1000, struct_fase.P, max_fase.P);
+        ValidateData(struct_fase.P * sin(struct_fase.angule), struct_fase.Q, max_fase.Q);
+        ValidateData(struct_fase.VLN * struct_fase.I, struct_fase.S, max_fase.S);
+    }
+
+    // Obtener Medicion Energia ---------------------------------------------------
+    if (!ValidateData(fase.energy(), struct_fase.E, max_fase.E))
+    {
+        Serial.println("Error reading energy");
+        return false;
+    }
+
+    // Obtener Medicion Frecuencia ---------------------------------------------------
+    if (!ValidateData(fase.frequency(), struct_fase.FP, max_fase.FP))
+    {
+        Serial.println("Error reading frequency");
+        return false;
+    }
+
+    return true;
+}
+
+int PZEM_Trifasico::GetMedicionTrifasica()
+{
+    bool _faseA;
+    bool _faseB;
+    bool _faseC;
+
+    if (_simulation)
+    {
+        _faseA = SimuMedicionMonofasica(DatosFaseA, MaxFaseA);
+        _faseB = SimuMedicionMonofasica(DatosFaseB, MaxFaseB);
+        _faseC = SimuMedicionMonofasica(DatosFaseC, MaxFaseC);
+    }
+    else
+    {
+        _faseA = GetMedicionMonofasica(faseA, DatosFaseA, MaxFaseA);
+        _faseB = GetMedicionMonofasica(faseB, DatosFaseB, MaxFaseB);
+        _faseC = GetMedicionMonofasica(faseC, DatosFaseC, MaxFaseC);
+    }
+
+    // Esta condicion nos indica que la medicion fue exitosa
+    if (_faseA && _faseB && _faseC)
+    {
+        ValidateData((DatosFaseA.P + DatosFaseB.P + DatosFaseC.P)           ,TriFase.P3,TriFase.P3_MAX);
+        ValidateData((DatosFaseA.Q + DatosFaseB.Q + DatosFaseC.Q)           ,TriFase.Q3,TriFase.Q3_MAX);
+        ValidateData((DatosFaseA.S + DatosFaseB.S + DatosFaseC.S) / 1000    ,TriFase.S3,TriFase.S3_MAX);
+        return PZEM_OK;
+    }
+
+    // Esta condicion nos indica que falla fase A
+    else if (!_faseA && _faseB && _faseC)
+    {
+        return PZEM_ERROR_FASE_A;
+    }
+
+    // Esta condicion nos indica que falla fase B
+    else if (_faseA && !_faseB && _faseC)
+    {
+        return PZEM_ERROR_FASE_B;
+    }
+
+    // Esta condicion nos indica que falla fase C
+    else if (_faseA && _faseB && !_faseC)
+    {
+        return PZEM_ERROR_FASE_C;
+    }
+
+    // Esta condicion nos indica que falla fase A y B
+    else if (!_faseA && !_faseB && _faseC)
+    {
+        return PZEM_ERROR_FASE_AB;
+    }
+
+    // Esta condicion nos indica que falla fase B y C
+    else if (_faseA && !_faseB && !_faseC)
+    {
+        return PZEM_ERROR_FASE_BC;
+    }
+
+    // Esta condicion nos indica que falla fase A y C
+    else if (!_faseA && _faseB && !_faseC)
+    {
+        return PZEM_ERROR_FASE_AC;
+    }
+
+    // Esta condicion nos indica que falla fase A B y C
+    else if (!_faseA && !_faseB && !_faseC)
+    {
+        return PZEM_ERROR_FASE_ABC;
+    }
 }

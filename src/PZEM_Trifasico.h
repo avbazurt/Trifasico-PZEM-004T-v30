@@ -18,15 +18,32 @@ private:
         float FP;
     };
 
+
+    struct ParametrosTriFase
+    {
+        float P3;
+        float Q3;
+        float S3;
+
+        float P3_MAX;
+        float Q3_MAX;
+        float S3_MAX;
+    };
     
-    void GetMedicionMonofasica(PZEM004Tv30 fase,ParametrosFase& struct_fase);
+
+
+    bool ValidateData(float medicion, float& valor, float& max);
+    bool GetMedicionMonofasica(PZEM004Tv30 fase,ParametrosFase& struct_fase, ParametrosFase& max_fase);
+    bool SimuMedicionMonofasica(ParametrosFase &struct_fase,ParametrosFase &max_fase);
 
     float asin(float c);
     float acos(float c);
     float atan(float c);
 
+    bool _simulation = false;
 
 public:
+
     // Constructor
     PZEM_Trifasico(HardwareSerial &PZEM_SERIAL, int PZEM_RX_PIN, int PZEM_TX_PIN,
                     int PZEM_ADDRESS_FASE_A = 0x00,
@@ -34,7 +51,9 @@ public:
                     int PZEM_ADDRESS_FASE_C = 0x02);
 
     // Funciones
-    void GetMedicionTrifasica();
+    int GetMedicionTrifasica();
+
+    void setModeSimulation();
 
     // Objetos
     PZEM004Tv30 faseA;
@@ -46,7 +65,11 @@ public:
     ParametrosFase DatosFaseB;
     ParametrosFase DatosFaseC;
 
-    float P3;
-    float Q3;
-    float S3;
+    //Max
+    ParametrosFase MaxFaseA;
+    ParametrosFase MaxFaseB;
+    ParametrosFase MaxFaseC;
+
+    ParametrosTriFase TriFase;
+
 };
