@@ -27,7 +27,7 @@ PZEM_Trifasico::PZEM_Trifasico(HardwareSerial &PZEM_SERIAL, int PZEM_RX_PIN, int
 
     // Inicializo
 
-    TriFase = {0,0,0,0,0,0};
+    TriFase = {0, 0, 0, 0, 0, 0};
 }
 
 float PZEM_Trifasico::asin(float c)
@@ -77,6 +77,24 @@ float PZEM_Trifasico::atan(float c)
 void PZEM_Trifasico::setModeSimulation()
 {
     _simulation = true;
+
+    DatosFaseA.Simu._num_change = random(60, 150);
+    DatosFaseA.Simu._currentSimu = 1.01 * random(1, 1000) / 100;
+    DatosFaseA.Simu._fpSimu = 1.01 * random(87, 90) / 100;
+
+    DatosFaseB.Simu._num_change = random(120, 240);
+    DatosFaseB.Simu._currentSimu = 1.01 * random(1, 1000) / 100;
+    DatosFaseB.Simu._fpSimu = 1.01 * random(87, 90) / 100;
+
+    DatosFaseC.Simu._num_change = random(120, 240);
+    DatosFaseC.Simu._currentSimu = 1.01 * random(1, 1000) / 100;
+    DatosFaseC.Simu._fpSimu = 1.01 * random(87, 90) / 100;
+
+    Serial.println("Cambios");
+    Serial.println(DatosFaseA.Simu._num_change);
+    Serial.println(DatosFaseB.Simu._num_change);
+    Serial.println(DatosFaseC.Simu._num_change);
+
 }
 
 bool PZEM_Trifasico::ValidateData(float medicion, float &valor, float &max)
@@ -97,9 +115,27 @@ bool PZEM_Trifasico::ValidateData(float medicion, float &valor, float &max)
 
 bool PZEM_Trifasico::SimuMedicionMonofasica(ParametrosFase &struct_fase, ParametrosFase &max_fase)
 {
-    ValidateData(110 + random(-100, 100) / 10, struct_fase.VLN, max_fase.VLN);
-    ValidateData((1.15 * random(0, 200)) / 10, struct_fase.I, max_fase.I);
-    ValidateData((1.15 * random(0, 90)) / 100, struct_fase.FP, max_fase.FP);
+    if (struct_fase.Simu._contador >= struct_fase.Simu._num_change)
+    {
+        struct_fase.Simu._num_change = random(60, 120);
+        struct_fase.Simu._contador = 0;
+
+        do
+        {
+            struct_fase.Simu._incrementoCurrente = 1.01 * random(-150,150)/ 100;
+        } while (struct_fase.Simu._currentSimu + struct_fase.Simu._incrementoCurrente > 9 or struct_fase.Simu._currentSimu + struct_fase.Simu._incrementoCurrente <= 0);
+        struct_fase.Simu._currentSimu = struct_fase.Simu._currentSimu + struct_fase.Simu._incrementoCurrente;
+
+        do
+        {
+            struct_fase.Simu._incrementoFP = 1.01 * random(-1, 1) / 100;
+        } while (struct_fase.Simu._fpSimu + struct_fase.Simu._incrementoFP > 0.97 or struct_fase.Simu._fpSimu + struct_fase.Simu._incrementoFP < 0.8);
+        struct_fase.Simu._fpSimu = struct_fase.Simu._fpSimu + struct_fase.Simu._incrementoFP;
+    }
+
+    ValidateData(110 + random(-25, 25) / 10, struct_fase.VLN, max_fase.VLN);
+    ValidateData(struct_fase.Simu._currentSimu + 1.01 * random(-150, 150) / 1000, struct_fase.I, max_fase.I);
+    ValidateData(struct_fase.Simu._fpSimu + 1.01 * random(-2, 2) / 100, struct_fase.FP, max_fase.FP);
 
     ValidateData(acos(struct_fase.FP), struct_fase.angule, max_fase.angule);
 
@@ -109,6 +145,9 @@ bool PZEM_Trifasico::SimuMedicionMonofasica(ParametrosFase &struct_fase, Paramet
 
     struct_fase.f = 60;
     max_fase.f = 60;
+
+    Serial.println(struct_fase.Simu._contador);
+    struct_fase.Simu._contador++;
 
     return true;
 }
@@ -192,9 +231,9 @@ int PZEM_Trifasico::GetMedicionTrifasica()
     // Esta condicion nos indica que la medicion fue exitosa
     if (_faseA && _faseB && _faseC)
     {
-        ValidateData((DatosFaseA.P + DatosFaseB.P + DatosFaseC.P)           ,TriFase.P3,TriFase.P3_MAX);
-        ValidateData((DatosFaseA.Q + DatosFaseB.Q + DatosFaseC.Q)           ,TriFase.Q3,TriFase.Q3_MAX);
-        ValidateData((DatosFaseA.S + DatosFaseB.S + DatosFaseC.S) / 1000    ,TriFase.S3,TriFase.S3_MAX);
+        ValidateData((DatosFaseA.P + DatosFaseB.P + DatosFaseC.P), TriFase.P3, TriFase.P3_MAX);
+        ValidateData((DatosFaseA.Q + DatosFaseB.Q + DatosFaseC.Q), TriFase.Q3, TriFase.Q3_MAX);
+        ValidateData((DatosFaseA.S + DatosFaseB.S + DatosFaseC.S) / 1000, TriFase.S3, TriFase.S3_MAX);
         return PZEM_OK;
     }
 
